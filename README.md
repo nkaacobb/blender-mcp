@@ -5,6 +5,8 @@ AI clients (Claude Code, VS Code, and other MCP clients) drive the copy of Blend
 that is open on this computer. It comes with a web page for browsing, testing, and
 starting/stopping the server.
 
+![The Blender MCP tester page, connected to the server, with the server panel open](assets/web-interface.png)
+
 ```
   MCP client or tester page        blender-mcp-server.py                Blender
   -------------------------        ---------------------                -------------------------
