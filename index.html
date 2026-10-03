@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blender MCP &mdash; Tool Explorer &amp; Tester</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --bg-2: #1b1e24;
+    --bg-3: #23272f;
+    --panel: #1e2229;
+    --border: #313743;
+    --border-soft: #2a2f38;
+    --text: #e7ebf1;
+    --muted: #9aa4b2;
+    --muted-2: #6f7885;
+    --accent: #ea7600;
+    --accent-2: #ff9b3d;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --err: #f85149;
+    --info: #58a6ff;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+  }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 11px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, opacity .12s;
+  }
+  button:hover:not(:disabled) { background: #2c313a; border-color: #3d4450; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1207; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: var(--accent-2); border-color: var(--accent-2); }
+  button.ghost { background: transparent; }
+  input, textarea, select {
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    width: 100%;
+    outline: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { font-family: var(--mono); resize: vertical; }
+  code, pre { font-family: var(--mono); }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 16px;
+    background: linear-gradient(180deg, #1d2128, #181b21);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 30;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; white-space: nowrap; }
+  .brand .logo {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), #f9b234);
+    display: grid; place-items: center; color: #17110a; font-weight: 800; font-size: 14px;
+  }
+  .brand small { display: block; font-weight: 400; color: var(--muted-2); font-size: 11px; }
+  .conn { display: flex; align-items: center; gap: 8px; flex: 1 1 460px; min-width: 320px; }
+  .conn input { flex: 1; min-width: 200px; font-family: var(--mono); font-size: 12px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap;
+    border: 1px solid var(--border); background: var(--bg-2); color: var(--muted);
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted-2); }
+  .pill.ok { color: #7ee787; border-color: #2f6b34; background: #17251a; }
+  .pill.ok .dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .pill.bad { color: #ff9a92; border-color: #6b2f2c; background: #251618; }
+  .pill.bad .dot { background: var(--err); }
+  .pill.busy .dot { background: var(--warn); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  button.pill { cursor: pointer; }
+  button.pill:hover:not(:disabled) { background: var(--bg-3); border-color: var(--muted-2); }
+  button.pill.ok:hover:not(:disabled) { background: #17251a; border-color: var(--ok); }
+  button.pill.bad:hover:not(:disabled) { background: #251618; border-color: var(--err); }
+  .pill .caret { font-size: 9px; opacity: .7; }
+
+  /* ---------- layout ---------- */
+  .layout { display: flex; flex: 1; min-height: 0; }
+  .sidebar {
+    width: 320px; flex: 0 0 320px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-2);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .sidebar-head { padding: 12px; border-bottom: 1px solid var(--border-soft); display: grid; gap: 8px; }
+  .sidebar-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sidebar-actions button { padding: 4px 8px; font-size: 12px; }
+  .tool-list { overflow: auto; flex: 1; padding: 6px 8px 24px; }
+  .group-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted-2); padding: 12px 8px 5px; font-weight: 600;
+  }
+  .tool-item {
+    display: block; width: 100%; text-align: left; background: transparent;
+    border: 1px solid transparent; border-radius: 6px; padding: 6px 9px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--text); cursor: pointer;
+  }
+  .tool-item:hover { background: var(--bg-3); }
+  .tool-item.active { background: #2b2114; border-color: #6b4a1e; color: var(--accent-2); }
+  .tool-item .missing { float: right; color: var(--warn); font-size: 11px; }
+
+  .content { flex: 1; overflow: auto; min-width: 0; padding: 18px 20px 60px; }
+
+  /* ---------- cards ---------- */
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; margin-bottom: 16px; overflow: hidden;
+  }
+  .card > header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 11px 14px; border-bottom: 1px solid var(--border-soft); background: #21252c;
+  }
+  .card > header h2 { margin: 0; font-size: 15px; font-family: var(--mono); }
+  .card > header .spacer { flex: 1; }
+  .card .body { padding: 14px; }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--bg-3); border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.accent { color: var(--accent-2); border-color: #6b4a1e; background: #2b2114; }
+  .badge.ok { color: #7ee787; border-color: #2f6b34; background: #17251a; }
+  .badge.err { color: #ff9a92; border-color: #6b2f2c; background: #251618; }
+  .badge.warn { color: #e3b341; border-color: #6b5520; background: #251f12; }
+  .desc { color: var(--muted); margin: 0 0 14px; max-width: 90ch; }
+
+  /* ---------- form ---------- */
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field.wide { grid-column: 1 / -1; }
+  .field label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .field label .req { color: var(--err); }
+  .field label .type { color: var(--muted-2); font-family: var(--mono); font-size: 11px; }
+  .field .hint { font-size: 11px; color: var(--muted-2); }
+  .field.bad input, .field.bad textarea, .field.bad select { border-color: var(--err); }
+  .field-cb { display: flex; align-items: center; gap: 8px; height: 33px; }
+  .field-cb input[type=checkbox] { width: auto; }
+
+  .form-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-soft); padding: 0 10px; background: #21252c; }
+  .tab {
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    border-radius: 0; padding: 9px 12px; color: var(--muted); font-size: 13px;
+  }
+  .tab:hover { background: transparent; color: var(--text); }
+  .tab.active { color: var(--accent-2); border-bottom-color: var(--accent); }
+  .tabpane { display: none; }
+  .tabpane.active { display: block; }
+
+  pre.out {
+    margin: 0; padding: 12px; background: #14171c; border: 1px solid var(--border-soft);
+    border-radius: 8px; overflow: auto; max-height: 480px; font-size: 12.5px;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  pre.out.plain { max-height: 300px; }
+  .k { color: #79c0ff; } .s { color: #a5d6ff; } .n { color: #ffab70; }
+  .b { color: #d2a8ff; } .nul { color: #8b949e; }
+  .meta-row { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .meta-row b { color: var(--text); font-weight: 600; }
+  .empty { color: var(--muted-2); font-style: italic; }
+
+  table.ref { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.ref th, table.ref td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  table.ref th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  table.ref td code { color: var(--accent-2); }
+  table.ref tr:hover td { background: #21252c; }
+
+  .log { display: grid; gap: 4px; max-height: 260px; overflow: auto; font-family: var(--mono); font-size: 12px; }
+  .log-row { display: flex; gap: 8px; align-items: baseline; padding: 3px 6px; border-radius: 5px; }
+  .log-row:hover { background: var(--bg-3); }
+  .log-row .t { color: var(--muted-2); flex: 0 0 66px; }
+  .log-row .m { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-row .st { flex: 0 0 auto; }
+
+  .note {
+    border-left: 3px solid var(--info); background: #16202c; padding: 10px 13px;
+    border-radius: 0 8px 8px 0; color: #c3d4e8; font-size: 13px; margin: 0 0 14px;
+  }
+  .note.warn { border-left-color: var(--warn); background: #241f12; color: #e8dcc0; }
+  .note.err { border-left-color: var(--err); background: #251618; color: #f0cdc9; }
+  .note code { background: #0e141b; padding: 1px 5px; border-radius: 4px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+  @media (max-width: 720px) {
+    .layout { flex-direction: column; }
+    .sidebar { width: auto; flex: 0 0 auto; max-height: 42vh; border-right: none; border-bottom: 1px solid var(--border); }
+  }
+  .kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-3); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; color: var(--muted); }
+  .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid #ffffff33; border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -1px; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  .hidden { display: none !important; }
+
+  /* ---------- server panel (opened from the status pill) ---------- */
+  .server-wrap { position: relative; }
+  .server-panel {
+    position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; margin: 0;
+    width: min(420px, calc(100vw - 32px));
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+  }
+  .server-panel .body { display: grid; gap: 12px; }
+  .server-panel .note { margin: 0; }
+  .server-panel pre.out { max-height: 260px; font-size: 11.5px; }
+  .server-state { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .server-state code { font-size: 12px; color: var(--accent-2); }
+  .server-line {
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .server-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .server-actions .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">B</div>
+    <div>
+      Blender MCP Tester
+      <small>Tool explorer &amp; live call harness</small>
+    </div>
+  </div>
+  <div class="conn">
+    <input id="endpoint" spellcheck="false" aria-label="MCP endpoint URL" />
+    <button id="connectBtn" class="primary">Connect</button>
+    <div class="server-wrap">
+      <button id="status" class="pill" type="button" title="MCP server controls" aria-expanded="false" aria-controls="serverPanel">
+        <span class="dot"></span><span id="statusText">disconnected</span><span class="caret" aria-hidden="true">&#9660;</span>
+      </button>
+      <section id="serverPanel" class="card server-panel hidden" aria-label="MCP server controls"></section>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <input id="search" placeholder="Search 51 tools&hellip;" aria-label="Search tools" spellcheck="false" />
+      <div class="sidebar-actions">
+        <button data-action="tools-list" title="MCP method: tools/list">tools/list</button>
+        <button data-action="resources-list" title="MCP method: resources/list">resources/list</button>
+        <button data-action="prompts-list" title="MCP method: prompts/list">prompts/list</button>
+        <button data-action="smoke" title="Run safe read-only tools">Smoke test</button>
+        <button data-action="clear-log" title="Clear activity log">Clear log</button>
+      </div>
+    </div>
+    <nav class="tool-list" id="toolList"></nav>
+  </aside>
+
+  <main class="content" id="content"></main>
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   Blender MCP tool explorer
+   -------------------------------------------------------------------------
+   Pure HTML/CSS/JS. Speaks MCP JSON-RPC 2.0 over the Streamable HTTP
+   transport (POST <endpoint>) directly against the FastMCP server.
+   ========================================================================= */
+
+const DEFAULT_ENDPOINT = "http://127.0.0.1:8765/mcp";
+const PROTOCOL_VERSION = "2025-06-18";
+const SPEC = "https://modelcontextprotocol.io/specification/2025-06-18";
+
+/* ---- curated metadata: category, call example, and blurb per tool ------- */
+const TOOL_META = {
+  ping_blender: {
+    category: "Health & Info",
+    blurb: "Round-trips through the MCP server into Blender. Use this first to prove the TCP bridge is alive.",
+    example: {}
+  },
+  get_blender_version: {
+    category: "Health & Info",
+    blurb: "Blender version string plus build branch/platform.",
+    example: {}
+  },
+  get_scene_info: {
+    category: "Health & Info",
+    blurb: "Scene name, timeline, fps, object counts by type, selection, and active camera.",
+    example: {}
+  },
+  list_objects: {
+    category: "Objects",
+    blurb: "Compact list of every scene object, optionally filtered by Blender object type.",
+    example: { object_type: "MESH", include_hidden: true }
+  },
+  inspect_object: {
+    category: "Objects",
+    blurb: "Full detail for one object: transforms, hierarchy, collections, materials, modifiers, mesh counts.",
+    example: { name: "Cube" }
+  },
+  get_object_hierarchy: {
+    category: "Objects",
+    blurb: "Parent/child tree for the whole scene as nested objects.",
+    example: {}
+  },
+  create_primitive: {
+    category: "Objects",
+    blurb: "Add a cube, sphere, ico_sphere, cylinder, cone, torus, plane, or circle. Units are meters.",
+    example: { primitive: "cube", name: "MCP_Cube", location_x: 0, location_y: 0, location_z: 1, dimensions: [2, 2, 2] }
+  },
+  delete_object: {
+    category: "Objects",
+    blurb: "Delete one object by name and unlink it from every collection. Safe if it is missing.",
+    example: { name: "MCP_Cube" }
+  },
+  duplicate_object: {
+    category: "Objects",
+    blurb: "Duplicate an object. linked_data shares the mesh datablock instead of copying it.",
+    example: { name: "Cube", new_name: "Cube_copy", linked_data: false }
+  },
+  rename_object: {
+    category: "Objects",
+    blurb: "Rename an object; rename_data also renames its mesh/data datablock.",
+    example: { name: "Cube", new_name: "Box", rename_data: false }
+  },
+  join_objects: {
+    category: "Objects",
+    blurb: "Join two or more compatible meshes. active_name receives the joined result.",
+    example: { names: ["Cube", "Cube_copy"], active_name: "Cube" }
+  },
+  select_objects: {
+    category: "Selection",
+    blurb: "Select objects by name. mode is replace, add, or remove.",
+    example: { names: ["Cube"], mode: "replace", active_name: "" }
+  },
+  deselect_all: {
+    category: "Selection",
+    blurb: "Clear the selection and the active object.",
+    example: {}
+  },
+  set_active_object: {
+    category: "Selection",
+    blurb: "Make one object active, optionally selecting it first.",
+    example: { name: "Cube", select: true }
+  },
+  set_object_transform: {
+    category: "Transforms",
+    blurb: "Set any subset of location / rotation / scale / dimensions. Rotations are Euler radians.",
+    example: { name: "MCP_Cube", location_x: 0, location_y: 0, location_z: 2, rotation_z: 0.785398, scale_x: 1, scale_y: 1, scale_z: 1 }
+  },
+  apply_object_transforms: {
+    category: "Transforms",
+    blurb: "Bake transforms into the mesh data. Rotation and scale default to true.",
+    example: { name: "MCP_Cube", location: false, rotation: true, scale: true }
+  },
+  set_object_origin: {
+    category: "Transforms",
+    blurb: "Move the object origin (ORIGIN_GEOMETRY, ORIGIN_CURSOR, ORIGIN_CENTER_OF_MASS, ORIGIN_CENTER_OF_VOLUME).",
+    example: { name: "Cube", origin_type: "ORIGIN_GEOMETRY", center: "MEDIAN" }
+  },
+  set_object_parent: {
+    category: "Transforms",
+    blurb: "Parent an object (or unparent with an empty parent_name) while optionally preserving world transform.",
+    example: { name: "Cube", parent_name: "", keep_transform: true }
+  },
+  set_object_visibility: {
+    category: "Transforms",
+    blurb: "Show or hide one object independently in the viewport and in renders.",
+    example: { name: "Cube", viewport_visible: true, render_visible: true }
+  },
+  center_object: {
+    category: "Transforms",
+    blurb: "Move the object's world-space bounding-box center to zero on the chosen axes.",
+    example: { name: "Cube", axes: "XYZ" }
+  },
+  place_object_on_ground: {
+    category: "Transforms",
+    blurb: "Translate the object so its bounding-box minimum Z lands on ground_z.",
+    example: { name: "MCP_Cube", ground_z: 0 }
+  },
+  list_collections: {
+    category: "Collections",
+    blurb: "Every collection with parents, direct objects, children, and visibility flags.",
+    example: {}
+  },
+  manage_collection: {
+    category: "Collections",
+    blurb: "action=create makes (or reuses) a collection; action=delete_empty removes an empty one.",
+    example: { action: "create", name: "MCP_Props", parent_name: "" }
+  },
+  move_objects_to_collection: {
+    category: "Collections",
+    blurb: "Link objects into an existing collection, optionally unlinking them from all others.",
+    example: { names: ["MCP_Cube"], collection_name: "MCP_Props", unlink_others: true }
+  },
+  get_mesh_info: {
+    category: "Mesh",
+    blurb: "Vertex/edge/polygon/triangle counts plus loose-edge and non-manifold diagnostics.",
+    example: { name: "Cube" }
+  },
+  clean_mesh: {
+    category: "Mesh",
+    blurb: "Edit-mode cleanup: merge by distance, delete loose geometry, recalculate normals.",
+    example: { name: "Cube", merge_distance: 0.0001, recalculate_normals: true, remove_loose: false }
+  },
+  set_shading: {
+    category: "Mesh",
+    blurb: "Set all faces smooth or flat, with an optional sharp-edge angle in radians.",
+    example: { name: "Cube", smooth: true, angle_radians: 0.523599 }
+  },
+  add_modifier: {
+    category: "Modifiers",
+    blurb: "Add BEVEL, SOLIDIFY, SUBSURF, DECIMATE, MIRROR, TRIANGULATE, ARRAY, or WELD; settings_json holds extra properties.",
+    example: { name: "Cube", modifier_type: "BEVEL", modifier_name: "", settings_json: '{"width": 0.02, "segments": 2}' }
+  },
+  apply_modifier: {
+    category: "Modifiers",
+    blurb: "Apply one named modifier to a mesh, baking it into the geometry.",
+    example: { name: "Cube", modifier_name: "Bevel" }
+  },
+  list_materials: {
+    category: "Materials",
+    blurb: "All materials with concise Principled values, texture paths, and user counts.",
+    example: {}
+  },
+  inspect_material_assignments: {
+    category: "Materials",
+    blurb: "An object's material slots plus how many polygons use each slot.",
+    example: { name: "Cube" }
+  },
+  create_principled_material: {
+    category: "Materials",
+    blurb: "Create or reuse a node material and set common PBR inputs. Colors are linear RGBA arrays.",
+    example: { name: "MCP_Orange", reuse: true, base_color: [0.9, 0.3, 0.05, 1], metallic: 0, roughness: 0.35, alpha: 1 }
+  },
+  assign_material: {
+    category: "Materials",
+    blurb: "Assign an existing material to an object, optionally clearing current slots first.",
+    example: { object_name: "MCP_Cube", material_name: "MCP_Orange", replace_slots: false }
+  },
+  remove_material: {
+    category: "Materials",
+    blurb: "Remove one material slot by index or by name. The material datablock itself is kept.",
+    example: { object_name: "MCP_Cube", material_name: "MCP_Orange", slot_index: null }
+  },
+  set_material_image_texture: {
+    category: "Materials",
+    blurb: "Load a local image and wire it to base_color, roughness, metallic, alpha, normal, or emission.",
+    example: { material_name: "MCP_Orange", filepath: "C:/textures/albedo.png", target: "base_color", colorspace: "sRGB" }
+  },
+  create_or_update_light: {
+    category: "Lighting & Cameras",
+    blurb: "Create or modify a POINT, SUN, SPOT, or AREA light. Rotation is Euler radians.",
+    example: { name: "MCP_Key", light_type: "AREA", energy: 500, color: [1, 0.95, 0.9], location: [3, -3, 4], rotation: [0.6, 0, 0.8] }
+  },
+  create_or_update_camera: {
+    category: "Lighting & Cameras",
+    blurb: "Create or modify a perspective camera; set_active makes it the scene camera.",
+    example: { name: "MCP_Cam", location: [7, -7, 5], rotation: [1.1, 0, 0.785398], lens_mm: 50, set_active: true }
+  },
+  aim_camera: {
+    category: "Lighting & Cameras",
+    blurb: "Point a camera's -Z axis at another object's origin or at an explicit XYZ point.",
+    example: { camera_name: "MCP_Cam", target_object: "MCP_Cube", target_point: null }
+  },
+  get_render_settings: {
+    category: "Rendering",
+    blurb: "Current engine, available engines, resolution, fps, output path, format, and samples.",
+    example: {}
+  },
+  set_render_settings: {
+    category: "Rendering",
+    blurb: "Set resolution, engine, output path, image format, film transparency, and Cycles samples.",
+    example: { resolution_x: 1920, resolution_y: 1080, resolution_percentage: 100, engine: "CYCLES", output_filepath: "//mcp_render.png", file_format: "PNG", film_transparent: false, samples: 64 }
+  },
+  render_still: {
+    category: "Rendering",
+    blurb: "Render the current frame. An explicit filepath overrides the scene output for this render.",
+    example: { filepath: "//mcp_render.png", write_still: true }
+  },
+  set_timeline: {
+    category: "Animation",
+    blurb: "Set the current frame and/or the inclusive scene frame range.",
+    example: { current_frame: 1, start_frame: 1, end_frame: 250 }
+  },
+  keyframe_transform: {
+    category: "Animation",
+    blurb: "Insert location / rotation_euler / scale keyframes at a frame with CONSTANT, LINEAR, or BEZIER interpolation.",
+    example: { name: "MCP_Cube", frame: 1, properties: ["location", "rotation_euler", "scale"], interpolation: "BEZIER" }
+  },
+  delete_transform_keyframes: {
+    category: "Animation",
+    blurb: "Delete transform keyframes for one object at a specific frame.",
+    example: { name: "MCP_Cube", frame: 1, properties: ["location"] }
+  },
+  get_animation_info: {
+    category: "Animation",
+    blurb: "Action name, frame range, curve data paths, and keyframe counts for one or all animated objects.",
+    example: { name: "MCP_Cube" }
+  },
+  import_asset: {
+    category: "Import & Export",
+    blurb: "Import a local GLB/glTF, FBX, OBJ, or STL and report the newly created objects.",
+    example: { filepath: "C:/assets/model.glb" }
+  },
+  export_gltf: {
+    category: "Import & Export",
+    blurb: "Export GLB (binary) or glTF (separate) to an explicit path, optionally selection-only.",
+    example: { filepath: "C:/exports/model.glb", selected_only: false }
+  },
+  save_blend_file: {
+    category: "Import & Export",
+    blurb: "Save the current .blend, or save-as to an explicit destination when a filepath is given.",
+    example: { filepath: "C:/projects/mcp_scene.blend" }
+  },
+  prepare_for_gltf: {
+    category: "Asset Prep",
+    blurb: "Prep meshes for GLB: apply rotation/scale, optional triangulation and smooth shading.",
+    example: { names: ["MCP_Cube"], apply_rotation: true, apply_scale: true, triangulate: false, shade_smooth: true }
+  },
+  validate_game_assets: {
+    category: "Asset Prep",
+    blurb: "Read-only asset audit: scale, materials, visibility, UVs, and polygon-count risks.",
+    example: { names: ["MCP_Cube"], polygon_warning_threshold: 100000 }
+  },
+  execute_blender_python: {
+    category: "Advanced",
+    blurb: "Unrestricted escape hatch. Assign your JSON-serializable return value to `result`.",
+    example: { code: "result = {\"objects\": [o.name for o in bpy.context.scene.objects]}" }
+  }
+};
+
+const CATEGORY_ORDER = [
+  "Health & Info", "Objects", "Selection", "Transforms", "Collections", "Mesh",
+  "Modifiers", "Materials", "Lighting & Cameras", "Rendering", "Animation",
+  "Import & Export", "Asset Prep", "Advanced", "Other"
+];
+
+/* ---- safe read-only tools used by the smoke test ------------------------ */
+const SMOKE_TEST = [
+  "ping_blender", "get_blender_version", "get_scene_info", "list_objects",
+  "list_collections", "list_materials", "get_render_settings",
+  "get_object_hierarchy", "get_animation_info"
+];
+
+/* =========================== state ===================================== */
+const state = {
+  endpoint: DEFAULT_ENDPOINT,
+  connected: false,
+  negotiatedVersion: "",
+  tools: [],           // raw tools/list entries
+  toolsLoaded: false,
+  selected: null,
+  lastResult: null,
+  log: [],
+  busy: false
+};
+let rpcId = 0;
+
+/* =========================== tiny DOM helpers ========================== */
+const $ = (sel, root) => (root || document).querySelector(sel);
+
+function h(tag, attrs, kids) {
+  const node = document.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class") node.className = v;
+      else if (k === "text") node.textContent = v;
+      else if (k === "html") node.innerHTML = v;
+      else if (k === "dataset") Object.assign(node.dataset, v);
+      else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v === true ? "" : String(v));
+    }
+  }
+  if (kids) {
+    const list = Array.isArray(kids) ? kids : [kids];
+    for (const kid of list) {
+      if (kid === null || kid === undefined || kid === false) continue;
+      node.appendChild(typeof kid === "string" ? document.createTextNode(kid) : kid);
+    }
+  }
+  return node;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/** Minimal JSON syntax highlighter applied to already-escaped text. */
+function highlightJson(escaped) {
+  return escaped
+    .replace(/(&quot;(?:\\.|[^&\\])*?&quot;)(\s*:)?/g, (m, str, colon) =>
+      colon ? '<span class="k">' + str + "</span>" + colon : '<span class="s">' + str + "</span>")
+    .replace(/\b(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, '<span class="n">$1</span>')
+    .replace(/\b(true|false)\b/g, '<span class="b">$1</span>')
+    .replace(/\bnull\b/g, '<span class="nul">null</span>');
+}
+
+function pretty(value) {
+  try { return JSON.stringify(value, null, 2); } catch (e) { return String(value); }
+}
+
+function renderJson(value) {
+  return h("pre", { class: "out", html: highlightJson(escapeHtml(pretty(value))) });
+}
+
+/* =========================== activity log ============================== */
+function logEvent(method, ok, status, ms, detail) {
+  const now = new Date();
+  state.log.unshift({
+    time: now.toTimeString().slice(0, 8),
+    method, ok, status, ms,
+    detail: detail || ""
+  });
+  if (state.log.length > 200) state.log.length = 200;
+  renderLog();
+}
+
+function renderLog() {
+  const host = $("#logHost");
+  if (!host) return;
+  host.textContent = "";
+  if (!state.log.length) {
+    host.appendChild(h("div", { class: "empty", text: "No calls yet." }));
+    return;
+  }
+  for (const entry of state.log) {
+    host.appendChild(h("div", { class: "log-row" }, [
+      h("span", { class: "t", text: entry.time }),
+      h("span", { class: "m", title: entry.method + " " + entry.detail, text: entry.method + (entry.detail ? " \u2014 " + entry.detail : "") }),
+      h("span", { class: "st" }, [
+        h("span", { class: "badge " + (entry.ok ? "ok" : "err"), text: (entry.status || "") + (entry.ms != null ? " " + entry.ms + "ms" : "") })
+      ])
+    ]));
+  }
+}
+
+/* =========================== MCP client ================================ */
+async function mcpPost(payload) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream"
+  };
+  if (state.negotiatedVersion) headers["MCP-Protocol-Version"] = state.negotiatedVersion;
+
+  const started = performance.now();
+  let res;
+  try {
+    res = await fetch(state.endpoint, { method: "POST", headers, body: JSON.stringify(payload) });
+  } catch (err) {
+    const e = new Error(
+      "Network/CORS failure reaching " + state.endpoint + ".\n" +
+      "The Blender MCP server does not send Access-Control-Allow-Origin headers, so a page served " +
+      "from a different origin cannot read the response. Open this page from http://127.0.0.1 or " +
+      "http://localhost and see the \"Connection & CORS\" panel.\n\n" + err.message
+    );
+    e.isNetwork = true;
+    throw e;
+  }
+  const ms = Math.round(performance.now() - started);
+  const contentType = res.headers.get("content-type") || "";
+  const text = await res.text();
+
+  let json = null;
+  if (text) {
+    if (contentType.includes("text/event-stream")) {
+      for (const line of text.split(/\r?\n/)) {
+        if (!line.startsWith("data:")) continue;
+        const chunk = line.slice(5).trim();
+        if (!chunk) continue;
+        try {
+          const parsed = JSON.parse(chunk);
+          if (parsed && (parsed.id !== undefined || parsed.result || parsed.error)) json = parsed;
+        } catch (e) { /* ignore keep-alive fragments */ }
+      }
+    } else {
+      try { json = JSON.parse(text); } catch (e) { /* non-JSON body */ }
+    }
+  }
+
+  if (!res.ok) {
+    const err = new Error("HTTP " + res.status + " " + res.statusText + (text ? "\n" + text : ""));
+    err.status = res.status;
+    err.body = text;
+    err.ms = ms;
+    if (res.status === 403) {
+      err.hint = "403 Forbidden. The server's DNS-rebinding guard rejected this page's Origin. " +
+        "Open the page from http://127.0.0.1:<port> or http://localhost:<port> (file:// sends Origin: null and is always rejected).";
+    }
+    throw err;
+  }
+  if (json && json.error) {
+    const err = new Error("MCP error " + json.error.code + ": " + json.error.message);
+    err.status = res.status;
+    err.ms = ms;
+    throw err;
+  }
+  return { json, status: res.status, ms, raw: text };
+}
+
+/** Send a request (with id) or notification (no id). */
+async function mcpCall(method, params) {
+  const payload = { jsonrpc: "2.0", method };
+  if (params !== undefined) payload.params = params;
+  const isNotification = method.startsWith("notifications/");
+  if (!isNotification) payload.id = ++rpcId;
+
+  const label = method + (params && params.name ? " (" + params.name + ")" : "");
+  try {
+    const out = await mcpPost(payload);
+    logEvent(label, true, out.status, out.ms);
+    return out.json ? out.json.result : undefined;
+  } catch (err) {
+    logEvent(label, false, err.status || "ERR", err.ms, (err.message || "").split("\n")[0]);
+    throw err;
+  }
+}
+
+/* =========================== connection ================================ */
+function setStatus(kind, text) {
+  const pill = $("#status");
+  pill.className = "pill" + (kind ? " " + kind : "");
+  $("#statusText").textContent = text;
+}
+
+async function connect() {
+  if (state.busy) return;
+  state.busy = true;
+  setStatus("busy", "connecting\u2026");
+  $("#connectBtn").disabled = true;
+
+  try {
+    const init = await mcpCall("initialize", {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: "blender-mcp-tester", version: "1.0.0" }
+    });
+    state.negotiatedVersion = (init && init.protocolVersion) || PROTOCOL_VERSION;
+
+    try { await mcpCall("notifications/initialized", {}); } catch (e) { /* optional */ }
+
+    state.connected = true;
+    await refreshTools();
+    const count = state.tools.length;
+    setStatus("ok", "connected \u00b7 " + count + " tools");
+    renderContent();
+  } catch (err) {
+    state.connected = false;
+    setStatus("bad", "connection failed");
+    renderContent(err);
+  } finally {
+    state.busy = false;
+    $("#connectBtn").disabled = false;
+    renderSidebar();
+    renderLog();
+  }
+}
+
+async function refreshTools() {
+  const result = await mcpCall("tools/list", {});
+  state.tools = (result && result.tools) || [];
+  state.toolsLoaded = true;
+  renderSidebar();
+  if (!state.selected || !state.tools.some(t => t.name === state.selected)) {
+    state.selected = state.tools.length ? state.tools[0].name : null;
+  }
+}
+
+function toolsByName() {
+  const map = new Map();
+  for (const t of state.tools) map.set(t.name, t);
+  return map;
+}
+
+/* ---- local fallback catalog so the page is useful before connecting ----- */
+function fallbackTools() {
+  return Object.keys(TOOL_META).map(name => ({
+    name,
+    description: TOOL_META[name].blurb,
+    inputSchema: { type: "object", properties: {}, title: name + "Arguments", required: [] },
+    __fallback: true
+  }));
+}
+
+/* =========================== server control ============================ */
+// server-control.php, next to this page when Apache serves it, starts, stops,
+// and restarts blender-mcp-server.py. The status pill opens its panel.
+const CONTROL_URL = "server-control.php";
+const START_TIMEOUT_MS = 45000;
+const POLL_MS = 500;
+
+const server = {
+  open: false,        // panel visible
+  available: null,    // false once server-control.php proves unreachable
+  status: null,       // latest status snapshot from server-control.php
+  statusSeq: 0,       // request number of that snapshot; older replies are dropped
+  phase: "idle",      // idle | starting | stopping
+  since: 0,           // when the current phase began
+  phaseSeq: 0,        // first request number of the current phase
+  notice: "",         // last success message
+  error: null,        // { title, detail } of the last failure
+  showLog: false
+};
+let controlSeq = 0;
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const elapsed = () => ((Date.now() - server.since) / 1000).toFixed(1) + " s";
+
+/** Call server-control.php. Every reply carries a fresh status snapshot. */
+async function controlRequest(action) {
+  const seq = ++controlSeq;
+  const init = action === "status"
+    ? { cache: "no-store" }
+    : { method: "POST", cache: "no-store", headers: { "X-Requested-With": "server-control" } };
+  let res = null;
+  let body = null;
+  try {
+    res = await fetch(CONTROL_URL + "?action=" + action, init);
+    body = await res.json();
+  } catch (e) { /* unreachable, or not answered by PHP: handled below */ }
+
+  if (!body || typeof body.ok !== "boolean") {
+    if (res && res.status >= 500) throw new Error(CONTROL_URL + " failed with HTTP " + res.status + "; see Apache's error log.");
+    server.available = false;
+    throw new Error(CONTROL_URL + " is not available from " + location.origin + ".");
+  }
+  server.available = true;
+  if (body.status && seq > server.statusSeq) {
+    server.status = body.status;
+    server.statusSeq = seq;
+  }
+  if (!body.ok) throw new Error(body.error || "HTTP " + res.status);
+  return body;
+}
+
+async function refreshServerStatus() {
+  try {
+    await controlRequest("status");
+  } catch (err) {
+    if (server.available) server.error = { title: "Could not read the server status.", detail: err.message };
+  }
+  renderServerPanel();
+}
+
+function setServerPanel(open) {
+  server.open = open;
+  $("#status").setAttribute("aria-expanded", String(open));
+  renderServerPanel();
+  if (open && server.phase === "idle") refreshServerStatus();
+}
+
+/** Start, restart, or stop the server, then follow it until it is up (and connected) or down. */
+async function serverAction(action) {
+  if (server.phase !== "idle") return;
+  const pillBefore = [$("#status").className, $("#statusText").textContent];
+  server.phase = action === "stop" ? "stopping" : "starting";
+  server.since = Date.now();
+  server.phaseSeq = controlSeq + 1;
+  server.notice = "";
+  server.error = null;
+  setServerPanel(true);
+  setStatus("busy", { start: "starting server…", restart: "restarting server…", stop: "stopping server…" }[action]);
+
+  try {
+    const reply = await controlRequest(action);
+    if (action === "stop") {
+      server.notice = reply.message;
+      serverDown("", "server stopped", "The MCP server was stopped from the server panel.");
+      return;
+    }
+    await waitForServer();
+    server.notice = reply.message + " Listening after " + elapsed() + ".";
+    server.phase = "idle";
+    renderServerPanel();
+    await connect();
+  } catch (err) {
+    server.error = { title: action === "stop" ? "Could not stop the server." : "The server did not start.", detail: err.message };
+    server.showLog = true;
+    setServerPanel(true);   // reopen it if it was closed meanwhile, so the failure is seen
+    if (action === "stop") {
+      $("#status").className = pillBefore[0];
+      $("#statusText").textContent = pillBefore[1];
+    } else {
+      serverDown("bad", "server failed to start", err.message);
+    }
+  } finally {
+    server.phase = "idle";
+    renderServerPanel();
+  }
+}
+
+/** Poll until the launched server listens on its port, exits, or times out. */
+async function waitForServer() {
+  for (;;) {
+    const st = server.status || {};
+    if (st.running) return;
+    if (!st.launched || !st.launched.alive) {
+      throw new Error("The server process exited before it opened port " + st.port + ". The log below shows why.");
+    }
+    if (Date.now() - server.since > START_TIMEOUT_MS) {
+      throw new Error("Port " + st.port + " did not open within " + START_TIMEOUT_MS / 1000 + " s. " +
+        "The process is still running; check the log below.");
+    }
+    renderServerPanel();
+    await sleep(POLL_MS);
+    await controlRequest("status");
+  }
+}
+
+/** The server is not running (stopped, or failed to start): show that in the pill and the page. */
+function serverDown(kind, pillText, message) {
+  state.connected = false;
+  setStatus(kind, pillText);
+  renderContent({ serverDown: true, message });
+}
+
+function serverStateRow(st) {
+  let kids;
+  if (server.phase === "starting") {
+    kids = [h("span", { class: "spin" }), "Starting… " + elapsed()];
+  } else if (server.phase === "stopping") {
+    kids = [h("span", { class: "spin" }), "Stopping…"];
+  } else if (!st) {
+    kids = [h("span", { class: "spin" }), "Checking…"];
+  } else if (st.running) {
+    kids = [h("span", { class: "badge ok", text: "running" }), "PID " + st.listener.pid + " ·", h("code", { text: st.endpoint })];
+  } else if (st.listener) {
+    kids = [h("span", { class: "badge warn", text: "port busy" }),
+      "Port " + st.port + " is held by " + (st.listener.image || "another program") + " (PID " + st.listener.pid + ")."];
+  } else if (st.starting) {
+    kids = [h("span", { class: "badge warn", text: "starting" }), "Launched " + st.launched.age + " s ago; port " + st.port + " is not open yet."];
+  } else {
+    kids = [h("span", { class: "badge err", text: "stopped" }), "Nothing is listening on port " + st.port + "."];
+  }
+  return h("div", { class: "server-state" }, kids);
+}
+
+function serverButtons(st) {
+  const busy = server.phase !== "idle" || !st;
+  const act = (label, action, primary) =>
+    h("button", { class: primary ? "primary" : "", disabled: busy, text: label, onclick: () => serverAction(action) });
+  const kids = [];
+  if (st && st.running) kids.push(act("Restart", "restart", true), act("Stop", "stop"));
+  else if (!st || !st.listener) kids.push(act("Start server", "start", true));
+  if (st && st.running && !state.connected && !busy) {
+    kids.push(h("button", { text: "Reconnect", onclick: () => connect().then(renderServerPanel) }));
+  }
+  kids.push(
+    h("div", { class: "spacer" }),
+    h("button", { class: "ghost", disabled: busy, text: "Refresh", onclick: refreshServerStatus }),
+    h("button", { class: "ghost", text: server.showLog ? "Hide log" : "Show log", onclick: () => { server.showLog = !server.showLog; renderServerPanel(); } })
+  );
+  return h("div", { class: "server-actions" }, kids);
+}
+
+function renderServerPanel() {
+  const panel = $("#serverPanel");
+  panel.classList.toggle("hidden", !server.open);
+  if (!server.open) return;
+  panel.textContent = "";
+  panel.appendChild(h("header", {}, [
+    h("h2", { text: "MCP server" }),
+    h("div", { class: "spacer" }),
+    h("button", { class: "ghost", title: "Close (Esc)", "aria-label": "Close", text: "×", onclick: () => setServerPanel(false) })
+  ]));
+  const body = h("div", { class: "body" });
+  panel.appendChild(body);
+
+  if (server.available === false) {
+    body.appendChild(h("div", { class: "note warn" }, [
+      "Starting and restarting go through ", h("code", { text: CONTROL_URL }),
+      ", which needs PHP. Open this page through Apache (XAMPP) to control the server from here."
+    ]));
+    return;
+  }
+
+  const st = server.status;
+  // Until a start/stop replies, the snapshot's log is still the previous run's.
+  const freshLog = server.phase === "idle" || server.statusSeq >= server.phaseSeq;
+  body.appendChild(serverStateRow(st));
+  if (server.phase === "starting" && st && st.log_tail && freshLog) {
+    const last = st.log_tail.trim().split("\n").pop();
+    body.appendChild(h("div", { class: "server-line", title: last, text: last }));
+  }
+  body.appendChild(serverButtons(st));
+  if (server.error) {
+    body.appendChild(h("div", { class: "note err" }, [h("b", { text: server.error.title }), " " + server.error.detail]));
+  } else if (server.notice) {
+    body.appendChild(h("div", { class: "note", text: server.notice }));
+  }
+  if (server.showLog && st) {
+    const pre = h("pre", { class: "out plain", text: (freshLog && st.log_tail) || "(the log is empty)" });
+    body.appendChild(pre);
+    body.appendChild(h("div", { class: "server-line", title: st.log_file, text: "Log: " + st.log_file }));
+    pre.scrollTop = pre.scrollHeight;
+  }
+}
+
+/* =========================== sidebar =================================== */
+function currentToolList() {
+  return state.tools.length ? state.tools : fallbackTools();
+}
+
+function renderSidebar() {
+  const host = $("#toolList");
+  host.textContent = "";
+  const query = ($("#search").value || "").trim().toLowerCase();
+
+  const groups = new Map();
+  for (const tool of currentToolList()) {
+    const meta = TOOL_META[tool.name];
+    const category = (meta && meta.category) || "Other";
+    if (query) {
+      const hay = (tool.name + " " + (tool.description || "") + " " + category).toLowerCase();
+      if (!hay.includes(query)) continue;
+    }
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(tool);
+  }
+
+  const ordered = CATEGORY_ORDER.filter(c => groups.has(c)).concat([...groups.keys()].filter(c => !CATEGORY_ORDER.includes(c)));
+  if (!ordered.length) {
+    host.appendChild(h("div", { class: "group-label", text: "No matching tools" }));
+    return;
+  }
+
+  for (const category of ordered) {
+    host.appendChild(h("div", { class: "group-label", text: category + " \u00b7 " + groups.get(category).length }));
+    for (const tool of groups.get(category)) {
+      const isFallbackOnly = tool.__fallback;
+      const btn = h("button", {
+        class: "tool-item" + (tool.name === state.selected ? " active" : ""),
+        type: "button",
+        onclick: () => selectTool(tool.name)
+      }, [
+        tool.name,
+        isFallbackOnly ? h("span", { class: "missing", title: "Not loaded from the server yet", text: "\u25cb" }) : null
+      ]);
+      host.appendChild(btn);
+    }
+  }
+}
+
+function selectTool(name) {
+  state.selected = name;
+  state.lastResult = null;
+  if (location.hash !== "#tool=" + name) location.hash = "#tool=" + name;
+  renderSidebar();
+  renderContent();
+  const content = $("#content");
+  if (content) content.scrollTop = 0;
+}
+
+/* =========================== schema helpers ============================ */
+/** Collapse `anyOf: [X, null]` down to X and remember nullability. */
+function normalizeSchema(prop) {
+  if (!prop) return { schema: { type: "string" }, nullable: false };
+  const branches = prop.anyOf || prop.oneOf;
+  if (Array.isArray(branches)) {
+    const real = branches.filter(b => b && b.type && b.type !== "null");
+    const hasNull = branches.some(b => b && b.type === "null");
+    if (real.length === 1) return { schema: { ...prop, ...real[0], anyOf: undefined, oneOf: undefined }, nullable: hasNull };
+    if (real.length > 1) return { schema: { ...prop, ...real[0] }, nullable: hasNull };
+    return { schema: { type: "null" }, nullable: true };
+  }
+  return { schema: prop, nullable: prop.type === "null" };
+}
+
+function fieldKind(schema) {
+  if (Array.isArray(schema.enum)) return "enum";
+  switch (schema.type) {
+    case "boolean": return "boolean";
+    case "integer":
+    case "number": return "number";
+    case "array": return "array";
+    case "object": return "object";
+    default: return "string";
+  }
+}
+
+function isMultiline(name, schema) {
+  if (name === "code" || name === "settings_json") return true;
+  if (typeof schema.description === "string" && /multiline|python|json object of/i.test(schema.description)) return true;
+  return false;
+}
+
+function typeLabel(schema, nullable) {
+  const kind = fieldKind(schema);
+  if (kind === "array") {
+    const item = schema.items && schema.items.type ? schema.items.type : "any";
+    return "array<" + item + ">";
+  }
+  if (kind === "enum") return "enum";
+  return (schema.type || kind) + (nullable ? " | null" : "");
+}
+
+/* =========================== form building ============================= */
+function buildField(name, prop, required) {
+  const { schema, nullable } = normalizeSchema(prop);
+  const kind = fieldKind(schema);
+  const title = schema.title || name;
+  const field = h("div", {
+    class: "field" + (isMultiline(name, schema) || kind === "object" ? " wide" : ""),
+    dataset: { name, kind, required: String(required), nullable: String(nullable) }
+  });
+
+  const label = h("label", {}, [
+    h("span", { text: title }),
+    required ? h("span", { class: "req", title: "required", text: "*" }) : null,
+    h("span", { class: "type", text: typeLabel(schema, nullable) })
+  ]);
+  field.appendChild(label);
+
+  const hasDefault = Object.hasOwn(schema, "default");
+  const dflt = hasDefault ? schema.default : undefined;
+
+  if (kind === "boolean") {
+    if (nullable) {
+      const sel = h("select", { "data-input": "1" });
+      sel.appendChild(h("option", { value: "", text: "(unset)" }));
+      sel.appendChild(h("option", { value: "true", text: "true" }));
+      sel.appendChild(h("option", { value: "false", text: "false" }));
+      if (dflt === true) sel.value = "true";
+      else if (dflt === false) sel.value = "false";
+      field.appendChild(sel);
+    } else {
+      const cb = h("input", { type: "checkbox", "data-input": "1" });
+      if (dflt !== false) cb.checked = true;
+      field.appendChild(h("div", { class: "field-cb" }, [cb, h("span", { class: "hint", text: dflt !== false ? "true" : "false" })]));
+    }
+  } else if (kind === "enum") {
+    const sel = h("select", { "data-input": "1" });
+    if (nullable) sel.appendChild(h("option", { value: "", text: "(unset)" }));
+    for (const option of schema.enum) sel.appendChild(h("option", { value: String(option), text: String(option) }));
+    if (dflt !== undefined && dflt !== null) sel.value = String(dflt);
+    field.appendChild(sel);
+  } else if (kind === "number") {
+    const input = h("input", { type: "number", step: "any", "data-input": "1", placeholder: nullable ? "(omit to unset)" : "" });
+    if (dflt !== undefined && dflt !== null) input.value = String(dflt);
+    field.appendChild(input);
+  } else if (kind === "array") {
+    const itemType = schema.items ? schema.items.type : "any";
+    const placeholder = (itemType === "number" || itemType === "integer")
+      ? "comma separated numbers, e.g. 1, 2, 3"
+      : (itemType === "string" ? "comma separated or JSON array, e.g. Cube, Sphere" : "JSON array, e.g. [1, 2]");
+    const input = h("input", { type: "text", "data-input": "1", placeholder });
+    if (Array.isArray(dflt)) input.value = itemType === "string" || itemType === "number" || itemType === "integer"
+      ? dflt.join(", ") : JSON.stringify(dflt);
+    input.dataset.itemType = itemType;
+    field.appendChild(input);
+  } else if (kind === "object") {
+    const ta = h("textarea", { rows: "4", "data-input": "1", placeholder: "{ }" });
+    if (dflt !== undefined && dflt !== null) ta.value = JSON.stringify(dflt, null, 2);
+    field.appendChild(ta);
+  } else {
+    if (isMultiline(name, schema)) {
+      const ta = h("textarea", { rows: name === "code" ? "7" : "4", "data-input": "1" });
+      if (dflt !== undefined && dflt !== null) ta.value = String(dflt);
+      else ta.value = "";
+      field.appendChild(ta);
+    } else {
+      const input = h("input", { type: "text", "data-input": "1", spellcheck: "false" });
+      if (dflt !== undefined && dflt !== null) input.value = String(dflt);
+      field.appendChild(input);
+    }
+  }
+
+  if (schema.description) field.appendChild(h("div", { class: "hint", text: schema.description }));
+  return field;
+}
+
+function readField(field) {
+  const kind = field.dataset.kind;
+  const required = field.dataset.required === "true";
+  const input = field.querySelector("[data-input]");
+  if (!input) return { present: false };
+
+  if (kind === "boolean" && input.type === "checkbox") return { present: true, value: input.checked };
+  if (kind === "boolean" || kind === "enum") {
+    if (input.value === "") return { present: false };
+    if (kind === "boolean") return { present: true, value: input.value === "true" };
+    return { present: true, value: input.value };
+  }
+
+  const raw = input.value.trim();
+  if (raw === "") {
+    if (required) return { present: false, error: "required" };
+    return { present: false };
+  }
+
+  if (kind === "number") {
+    const num = Number(raw);
+    if (!Number.isFinite(num)) return { present: false, error: "must be a number" };
+    return { present: true, value: num };
+  }
+  if (kind === "array") {
+    const itemType = input.dataset.itemType || "any";
+    const tokens = raw.split(",").map(s => s.trim()).filter(Boolean);
+    const simple = (itemType === "number" || itemType === "integer" || itemType === "string") && !/^[[{]/.test(raw);
+    if (simple) {
+      if (itemType === "string") return { present: true, value: tokens };
+      const nums = tokens.map(Number);
+      if (nums.some(n => !Number.isFinite(n))) return { present: false, error: "all values must be numbers" };
+      return { present: true, value: nums };
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return { present: false, error: "must be a JSON array" };
+      return { present: true, value: parsed };
+    } catch (e) { /* not JSON: surfaced as a field error below */ return { present: false, error: "invalid JSON" }; }
+  }
+  if (kind === "object") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") return { present: false, error: "must be a JSON object" };
+      return { present: true, value: parsed };
+    } catch (e) { /* not JSON: surfaced as a field error below */ return { present: false, error: "invalid JSON" }; }
+  }
+  return { present: true, value: raw };
+}
+
+function collectArgs() {
+  const args = {};
+  const errors = [];
+  for (const field of document.querySelectorAll("#toolForm .field")) {
+    const out = readField(field);
+    field.classList.remove("bad");
+    if (out.error) {
+      field.classList.add("bad");
+      errors.push(field.dataset.name + ": " + out.error);
+    } else if (out.present) {
+      args[field.dataset.name] = out.value;
+    }
+  }
+  return { args, errors };
+}
+
+function applyExample(toolName) {
+  const meta = TOOL_META[toolName];
+  if (!meta || !meta.example) return;
+  for (const field of document.querySelectorAll("#toolForm .field")) {
+    const name = field.dataset.name;
+    if (!Object.hasOwn(meta.example, name)) continue;
+    const value = meta.example[name];
+    const kind = field.dataset.kind;
+    const input = field.querySelector("[data-input]");
+    if (!input) continue;
+    if (kind === "boolean") {
+      if (input.type === "checkbox") input.checked = !!value;
+      else input.value = value === null || value === undefined ? "" : String(value);
+    } else if (kind === "array") {
+      input.value = (value === null || value === undefined) ? ""
+        : (input.dataset.itemType === "string" || input.dataset.itemType === "number" || input.dataset.itemType === "integer")
+          ? value.join(", ") : JSON.stringify(value);
+    } else if (kind === "object") {
+      input.value = (value === null || value === undefined) ? "" : JSON.stringify(value, null, 2);
+    } else {
+      input.value = (value === null || value === undefined) ? "" : String(value);
+    }
+    field.classList.remove("bad");
+  }
+}
+
+/* =========================== call examples ============================= */
+function exampleArgs(toolName) {
+  const meta = TOOL_META[toolName];
+  if (meta && meta.example) return meta.example;
+  const tool = toolsByName().get(toolName);
+  const props = (tool && tool.inputSchema && tool.inputSchema.properties) || {};
+  const required = (tool && tool.inputSchema && tool.inputSchema.required) || [];
+  const out = {};
+  for (const name of required) {
+    const { schema } = normalizeSchema(props[name]);
+    const kind = fieldKind(schema);
+    if (kind === "number") out[name] = 0;
+    else if (kind === "boolean") out[name] = true;
+    else if (kind === "array") out[name] = [];
+    else if (kind === "object") out[name] = {};
+    else out[name] = "";
+  }
+  return out;
+}
+
+function rpcEnvelope(toolName, args) {
+  return { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: toolName, arguments: args } };
+}
+
+function curlSnippet(toolName, args) {
+  const body = JSON.stringify(rpcEnvelope(toolName, args));
+  const clean = body.replace(/'/g, "'\\''");
+  return [
+    "curl -sS -X POST " + state.endpoint + " \\",
+    "  -H 'Content-Type: application/json' \\",
+    "  -H 'Accept: application/json, text/event-stream' \\",
+    "  -d '" + clean + "'"
+  ].join("\n");
+}
+
+function jsSnippet(toolName, args) {
+  return [
+    "const res = await fetch(" + JSON.stringify(state.endpoint) + ", {",
+    "  method: 'POST',",
+    "  headers: {",
+    "    'Content-Type': 'application/json',",
+    "    'Accept': 'application/json, text/event-stream'",
+    "  },",
+    "  body: JSON.stringify(" + pretty(rpcEnvelope(toolName, args)).split("\n").join("\n  ") + ")",
+    "});",
+    "const data = await res.json();",
+    "console.log(data.result);"
+  ].join("\n");
+}
+
+/* =========================== tool calling ============================== */
+/** MCP reports an in-Blender failure as a successful response with isError set. */
+function toolErrorText(result) {
+  const content = result && result.content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (block && block.type === "text" && typeof block.text === "string") return block.text.trim();
+    }
+  }
+  return "the tool reported an error";
+}
+
+async function callTool(toolName, args, button) {
+  if (button) { button.disabled = true; button.dataset.label = button.textContent; button.innerHTML = '<span class="spin"></span> calling\u2026'; }
+  try {
+    const result = await mcpCall("tools/call", { name: toolName, arguments: args });
+    const failed = !!(result && result.isError);
+    state.lastResult = { ok: !failed, toolError: failed, toolName, args, result, at: new Date() };
+    renderResult();
+    return { ok: !failed, result, errorText: failed ? toolErrorText(result) : "" };
+  } catch (err) {
+    state.lastResult = { ok: false, toolName, args, error: err, at: new Date() };
+    renderResult();
+    return { ok: false, error: err, errorText: (err.message || String(err)).split("\n")[0] };
+  } finally {
+    if (button) { button.disabled = false; button.textContent = button.dataset.label || "Call tool"; }
+    renderLog();
+  }
+}
+
+async function runSmokeTest() {
+  const btn = document.querySelector('[data-action="smoke"]');
+  if (btn) { btn.disabled = true; btn.textContent = "running\u2026"; }
+  const rows = [];
+  for (const name of SMOKE_TEST) {
+    const available = !state.tools.length || toolsByName().has(name);
+    if (!available) { rows.push({ name, status: "skipped", detail: "not exposed by server" }); continue; }
+    const started = performance.now();
+    // Every smoke-test tool is argument-free, so an empty object keeps the run
+    // independent of whatever happens to be in the open scene.
+    const outcome = await callTool(name, {});
+    rows.push({
+      name,
+      status: outcome.ok ? "pass" : "fail",
+      ms: Math.round(performance.now() - started),
+      detail: outcome.ok ? "ok" : (outcome.errorText || "")
+    });
+  }
+  if (btn) { btn.disabled = false; btn.textContent = "Smoke test"; }
+  showSmokeReport(rows);
+}
+
+function showSmokeReport(rows) {
+  const host = $("#smokeHost");
+  if (!host) return;
+  host.textContent = "";
+  const passed = rows.filter(r => r.status === "pass").length;
+  const failed = rows.filter(r => r.status === "fail").length;
+  const badge = h("span", { class: "badge " + (failed ? "err" : "ok"), text: passed + " passed, " + failed + " failed" });
+  host.appendChild(h("div", { class: "meta-row" }, [badge, h("span", { text: "run at " + new Date().toLocaleTimeString() })]));
+  const table = h("table", { class: "ref" }, [
+    h("thead", {}, [h("tr", {}, [h("th", { text: "Tool" }), h("th", { text: "Status" }), h("th", { text: "Time" }), h("th", { text: "Detail" })])])
+  ]);
+  const tbody = h("tbody");
+  for (const row of rows) {
+    tbody.appendChild(h("tr", {}, [
+      h("td", {}, [h("code", { text: row.name })]),
+      h("td", {}, [h("span", { class: "badge " + (row.status === "pass" ? "ok" : row.status === "fail" ? "err" : "warn"), text: row.status })]),
+      h("td", { text: row.ms != null ? row.ms + "ms" : "\u2014" }),
+      h("td", { text: row.detail || "" })
+    ]));
+  }
+  table.appendChild(tbody);
+  host.appendChild(table);
+  host.classList.remove("hidden");
+}
+
+/* =========================== result rendering ========================== */
+function renderResult() {
+  const host = $("#resultHost");
+  if (!host) return;
+  host.textContent = "";
+  const last = state.lastResult;
+  if (!last) {
+    host.appendChild(h("div", { class: "empty", text: "No call made yet. Pick a tool, adjust the arguments, and press \u201cCall tool\u201d." }));
+    return;
+  }
+  const took = last.at.toLocaleTimeString();
+  if (last.toolError) {
+    host.appendChild(h("div", { class: "meta-row" }, [
+      h("span", { class: "badge err", text: "tool error" }),
+      h("span", {}, [h("b", { text: last.toolName })]),
+      h("span", { text: took })
+    ]));
+    host.appendChild(h("div", { class: "note warn", text: "The call reached Blender, but the tool itself failed. The full response is below." }));
+    host.appendChild(renderJson(last.result));
+  } else if (last.ok) {
+    host.appendChild(h("div", { class: "meta-row" }, [
+      h("span", { class: "badge ok", text: "success" }),
+      h("span", {}, [h("b", { text: last.toolName })]),
+      h("span", { text: took })
+    ]));
+    host.appendChild(renderJson(last.result));
+  } else {
+    const err = last.error || {};
+    host.appendChild(h("div", { class: "meta-row" }, [
+      h("span", { class: "badge err", text: err.status ? "HTTP " + err.status : "error" }),
+      h("span", {}, [h("b", { text: last.toolName })]),
+      h("span", { text: took })
+    ]));
+    host.appendChild(h("pre", { class: "out", text: err.message || String(err) }));
+    if (err.hint) host.appendChild(h("div", { class: "note err", text: err.hint }));
+    if (err.body) {
+      host.appendChild(h("div", { class: "group-label", text: "Response body" }));
+      host.appendChild(h("pre", { class: "out plain", text: err.body }));
+    }
+  }
+}
+
+/* =========================== views ===================================== */
+function connectionCard() {
+  const body = h("div", { class: "body" }, [
+    h("p", { class: "desc", text: "The MCP server is a stateless Streamable HTTP endpoint. Every call is a JSON-RPC 2.0 POST to the URL below." }),
+    h("table", { class: "ref" }, [
+      h("thead", {}, [h("tr", {}, [h("th", { text: "Item" }), h("th", { text: "Value" })])]),
+      h("tbody", {}, [
+        h("tr", {}, [h("td", { text: "Endpoint" }), h("td", {}, [h("code", { text: state.endpoint })])]),
+        h("tr", {}, [h("td", { text: "This page" }), h("td", {}, [h("code", { text: location.origin })])]),
+        h("tr", {}, [h("td", { text: "Same origin?" }), h("td", {}, [h("span", { class: "badge " + (isSameOrigin() ? "ok" : "warn"), text: isSameOrigin() ? "yes \u2014 no CORS" : "no \u2014 CORS applies" })])]),
+        h("tr", {}, [h("td", { text: "Transport" }), h("td", { text: "Streamable HTTP (POST, JSON response)" })]),
+        h("tr", {}, [h("td", { text: "Protocol" }), h("td", {}, [h("code", { text: PROTOCOL_VERSION })])]),
+        h("tr", {}, [h("td", { text: "Required headers" }), h("td", {}, [h("code", { text: "Content-Type: application/json" }), ", ", h("code", { text: "Accept: application/json, text/event-stream" })])]),
+        h("tr", {}, [h("td", { text: "Start the server" }), h("td", {}, [h("code", { text: "python blender-mcp-server.py --mcp-port 8765" })])])
+      ])
+    ])
+  ]);
+  return h("div", { class: "card" }, [h("header", {}, [h("h2", { text: "Connection" })]), body]);
+}
+
+function renderConnectionHelp(err) {
+  const wrap = h("div");
+  if (!err) {
+    wrap.appendChild(h("div", { class: "note", text: "Connecting to " + state.endpoint + " \u2026" }));
+    wrap.appendChild(connectionCard());
+    return wrap;
+  }
+
+  const msg = err.message || String(err);
+  let title;
+  let detail;
+  if (err.status === 403) {
+    title = "The endpoint rejected this page's origin (403).";
+    detail = "The MCP server validates the Origin header, and " + location.origin +
+      " is not in its allow-list. Serve the page from the MCP server itself (http://127.0.0.1:8765/) " +
+      "so it is same-origin, or start the server with --allow-origin " + location.origin + " --allow-host " + location.host + ".";
+  } else if (err.status === 421) {
+    title = "The endpoint rejected the Host header (421).";
+    detail = "The DNS-rebinding guard only accepts loopback Host values. Start the server with " +
+      "--allow-host " + location.host + " (or set proxy_set_header Host 127.0.0.1:8765 on a reverse proxy).";
+  } else if (err.serverDown) {
+    title = "The MCP server is not running.";
+    detail = "Start it with the button below, or from the status pill in the top-right corner.";
+  } else if (err.isNetwork) {
+    title = "Could not reach " + state.endpoint + ".";
+    detail = "Nothing is listening there, the request was blocked before it left the browser " +
+      "(mixed content, or a public-to-local request), or the browser refused to release the response " +
+      "because the endpoint sent no Access-Control-Allow-Origin header.";
+  } else {
+    title = "Request failed.";
+    detail = msg.split("\n")[0];
+  }
+
+  const note = h("div", { class: "note err" }, [h("b", { text: title }), h("span", { text: " " + detail })]);
+  if ((err.isNetwork || err.serverDown) && server.available !== false) {
+    note.appendChild(h("div", { class: "form-actions", style: "margin-top: 10px" }, [
+      // stopPropagation: this click must not count as an outside click that closes the panel.
+      h("button", { class: "primary", text: "Start server", onclick: (e) => { e.stopPropagation(); serverAction("start"); } })
+    ]));
+  }
+  wrap.appendChild(note);
+  wrap.appendChild(h("pre", { class: "out plain", text: msg }));
+  wrap.appendChild(connectionCard());
+  return wrap;
+}
+
+function renderMCPMethods() {
+  const rows = [
+    ["initialize", "Handshake. Returns protocolVersion, capabilities, serverInfo.", "POST a JSON-RPC request with id 1."],
+    ["notifications/initialized", "Notification (no id) sent after initialize.", "Fire-and-forget; server replies 202."],
+    ["tools/list", "Enumerate every tool with name, description, and JSON input schema.", "Drives the tool list in this page."],
+    ["tools/call", "Invoke a tool: params.name + params.arguments.", "This is what the Call button sends."],
+    ["resources/list", "List MCP resources. This server exposes none.", "Expect an empty list."],
+    ["prompts/list", "List MCP prompts. This server exposes none.", "Expect an empty list."],
+    ["ping", "Protocol-level keepalive.", "Returns an empty result."]
+  ];
+  const tbody = h("tbody");
+  for (const [method, what, how] of rows) {
+    tbody.appendChild(h("tr", {}, [
+      h("td", {}, [h("code", { text: method })]),
+      h("td", { text: what }),
+      h("td", { text: how })
+    ]));
+  }
+  return h("div", { class: "card" }, [
+    h("header", {}, [
+      h("h2", { text: "MCP methods" }),
+      h("span", { class: "badge" }),
+      h("div", { class: "spacer" }),
+      h("a", { href: SPEC + "/server/tools", target: "_blank", rel: "noreferrer", text: "Spec: tools \u2197" })
+    ]),
+    h("div", { class: "body" }, [
+      h("p", { class: "desc", text: "Requests are JSON-RPC 2.0 objects posted to the endpoint. Requests carry an id; notifications do not." }),
+      h("table", { class: "ref" }, [
+        h("thead", {}, [h("tr", {}, [h("th", { text: "Method" }), h("th", { text: "Purpose" }), h("th", { text: "Notes" })])]),
+        tbody
+      ])
+    ])
+  ]);
+}
+
+function renderConsole() {
+  const ta = h("textarea", { rows: "5", id: "consoleInput", spellcheck: "false" });
+  ta.value = JSON.stringify(rpcEnvelopeCompat("tools/list", undefined), null, 2);
+  const out = h("pre", { class: "out plain", id: "consoleOutput", text: "Response appears here." });
+
+  const send = h("button", { class: "primary", onclick: async (ev) => {
+    const btn = ev.currentTarget;
+    let payload;
+    try { payload = JSON.parse($("#consoleInput").value); }
+    catch (e) { $("#consoleOutput").textContent = "Invalid JSON: " + e.message; return; }
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span> sending\u2026';
+    try {
+      const res = await mcpPost(payload);
+      out.innerHTML = res.json ? highlightJson(escapeHtml(pretty(res.json))) : escapeHtml(res.raw || "(empty body \u00b7 HTTP " + res.status + ")");
+    } catch (err) {
+      out.textContent = (err.message || String(err)) + (err.hint ? "\n\n" + err.hint : "");
+    } finally {
+      btn.disabled = false; btn.textContent = "Send JSON-RPC";
+      renderLog();
+    }
+  }});
+  send.textContent = "Send JSON-RPC";
+
+  return h("div", { class: "card" }, [
+    h("header", {}, [
+      h("h2", { text: "Raw JSON-RPC console" }),
+      h("div", { class: "spacer" }),
+      h("span", { class: "badge", text: "advanced" })
+    ]),
+    h("div", { class: "body" }, [
+      h("p", { class: "desc", text: "Post any JSON-RPC 2.0 message (or batch) straight to the endpoint." }),
+      h("div", { class: "field wide" }, [ta]),
+      h("div", { class: "form-actions" }, [send]),
+      out
+    ])
+  ]);
+}
+
+function rpcEnvelopeCompat(method, params) {
+  const payload = { jsonrpc: "2.0", id: 1, method };
+  if (params !== undefined) payload.params = params;
+  return payload;
+}
+
+function renderLogCard() {
+  const host = h("div", { class: "log", id: "logHost" });
+  const card = h("div", { class: "card" }, [
+    h("header", {}, [
+      h("h2", { text: "Activity log" }),
+      h("div", { class: "spacer" }),
+      h("button", { class: "ghost", onclick: () => { state.log = []; renderLog(); }, text: "Clear" })
+    ]),
+    h("div", { class: "body" }, [host])
+  ]);
+  setTimeout(renderLog, 0);
+  return card;
+}
+
+/* ---- tool detail ------------------------------------------------------ */
+function renderToolDetail() {
+  const name = state.selected;
+  const liveTool = toolsByName().get(name);
+  const meta = TOOL_META[name] || {};
+  const fallbackOnly = !liveTool;
+
+  const tool = liveTool || {
+    name,
+    description: meta.blurb || "",
+    inputSchema: { type: "object", properties: {}, required: [], title: name + "Arguments" }
+  };
+
+  const schema = tool.inputSchema || {};
+  const props = schema.properties || {};
+  const required = schema.required || [];
+  const propNames = Object.keys(props);
+
+  const card = h("div", { class: "card" });
+  card.appendChild(h("header", {}, [
+    h("h2", { text: name || "\u2014" }),
+    h("span", { class: "badge accent", text: meta.category || "Other" }),
+    h("div", { class: "spacer" }),
+    h("button", {
+      class: "ghost",
+      title: "Copy a deep link to this tool",
+      onclick: async (ev) => {
+        const url = location.origin + location.pathname + "#tool=" + name;
+        try { await navigator.clipboard.writeText(url); ev.currentTarget.textContent = "Copied \u2713"; }
+        catch (e) { /* clipboard blocked (insecure context): fall back to showing the URL */ ev.currentTarget.textContent = url; }
+        setTimeout(() => { ev.currentTarget.textContent = "Copy link"; }, 1400);
+      },
+      text: "Copy link"
+    })
+  ]));
+
+  const body = h("div", { class: "body" });
+  body.appendChild(h("p", { class: "desc", text: tool.description || meta.blurb || "(no description)" }));
+  if (fallbackOnly) {
+    body.appendChild(h("div", { class: "note", html:
+      "This tool is shown from the built-in catalog because it was not returned by <code>tools/list</code> yet. " +
+      "Press <b>Connect</b> to load the live schema (the generated form will then match the server exactly)." }));
+  }
+
+  /* Build the argument form */
+  const form = h("form", { id: "toolForm", onsubmit: (e) => e.preventDefault() });
+  const fieldsWrap = h("div", { class: "fields" });
+  if (!propNames.length) {
+    fieldsWrap.appendChild(h("div", { class: "empty", text: "This tool takes no arguments." }));
+  } else {
+    for (const pname of propNames) {
+      fieldsWrap.appendChild(buildField(pname, props[pname], required.includes(pname)));
+    }
+  }
+  form.appendChild(fieldsWrap);
+
+  const callBtn = h("button", { class: "primary", type: "button", onclick: async () => {
+    const { args, errors } = collectArgs();
+    if (errors.length) {
+      state.lastResult = { ok: false, toolName: name, args, error: new Error("Fix the highlighted fields: " + errors.join("; ")), at: new Date() };
+      renderResult();
+      return;
+    }
+    await callTool(name, args, callBtn);
+    renderJsonTabs(name, args);
+  }});
+  callBtn.textContent = "Call tool";
+
+  const actions = h("div", { class: "form-actions" }, [
+    callBtn,
+    h("button", { type: "button", class: "ghost", onclick: (ev) => { applyExample(name); const t = $("#jsonPreview"); if (t) renderJsonTabs(name, exampleArgs(name)); }, text: "Load example" }),
+    h("button", { type: "button", class: "ghost", onclick: () => {
+      const { args } = collectArgs();
+      const ta = $("#jsonPreview");
+      if (ta) ta.innerHTML = highlightJson(escapeHtml(pretty(rpcEnvelope(name, args))));
+    }, text: "Preview payload" }),
+    h("button", { type: "button", class: "ghost", onclick: async (ev) => {
+      const { args } = collectArgs();
+      try { await navigator.clipboard.writeText(curlSnippet(name, args)); ev.currentTarget.textContent = "Copied \u2713"; }
+      catch (e) { /* clipboard blocked (insecure context) */ ev.currentTarget.textContent = "Copy failed"; }
+      setTimeout(() => { ev.currentTarget.textContent = "Copy cURL"; }, 1400);
+    }, text: "Copy cURL" }),
+    h("button", { type: "button", class: "ghost", onclick: () => {
+      const el = $("#curlBlock");
+      if (el) el.classList.toggle("hidden");
+    }, text: "Show cURL" })
+  ]);
+  form.appendChild(actions);
+  body.appendChild(form);
+
+  /* Argument reference table */
+  if (propNames.length) {
+    const tbody = h("tbody");
+    for (const pname of propNames) {
+      const { schema: ps, nullable } = normalizeSchema(props[pname]);
+      tbody.appendChild(h("tr", {}, [
+        h("td", {}, [h("code", { text: pname })]),
+        h("td", { text: typeLabel(ps, nullable) }),
+        h("td", {}, [required.includes(pname) ? h("span", { class: "badge warn", text: "required" }) : h("span", { class: "badge", text: "optional" })]),
+        h("td", { text: ps.description || (nullable ? "may be null/omitted" : "") })
+      ]));
+    }
+    body.appendChild(h("div", { class: "group-label", text: "Arguments" }));
+    body.appendChild(h("table", { class: "ref" }, [
+      h("thead", {}, [h("tr", {}, [h("th", { text: "Name" }), h("th", { text: "Type" }), h("th", { text: "Required" }), h("th", { text: "Description" })])]),
+      tbody
+    ]));
+  }
+
+  body.appendChild(h("pre", { class: "out plain hidden", id: "curlBlock", text: curlSnippet(name, exampleArgs(name)) }));
+  card.appendChild(body);
+
+  const jsonCard = h("div", { class: "card" }, [
+    h("header", {}, [
+      h("h2", { text: "Request payload" }),
+      h("span", { class: "badge", text: "tools/call" }),
+      h("div", { class: "spacer" }),
+      h("span", { class: "badge", text: "JSON-RPC 2.0" })
+    ]),
+    h("div", { class: "body" }, [
+      h("pre", { class: "out", id: "jsonPreview", html: highlightJson(escapeHtml(pretty(rpcEnvelope(name, exampleArgs(name))))) })
+    ])
+  ]);
+
+  const resultCard = h("div", { class: "card" }, [
+    h("header", {}, [
+      h("h2", { text: "Result" }),
+      h("div", { class: "spacer" }),
+      h("span", { class: "badge", text: "tools/call response" })
+    ]),
+    h("div", { class: "body" }, [h("div", { id: "resultHost" })])
+  ]);
+
+  const frag = document.createDocumentFragment();
+  frag.appendChild(card);
+  frag.appendChild(h("div", { class: "grid-2" }, [jsonCard, resultCard]));
+
+  const smokeCard = h("div", { class: "card hidden", id: "smokeCard" }, [
+    h("header", {}, [
+      h("h2", { text: "Smoke test" }),
+      h("span", { class: "badge", text: "read-only tools" }),
+      h("div", { class: "spacer" }),
+      h("button", { class: "ghost", onclick: () => $("#smokeCard").classList.add("hidden"), text: "Hide" })
+    ]),
+    h("div", { class: "body" }, [h("div", { id: "smokeHost" })])
+  ]);
+  frag.appendChild(smokeCard);
+  frag.appendChild(renderLogCard());
+  frag.appendChild(renderMCPMethods());
+  frag.appendChild(renderConsole());
+
+  return frag;
+}
+
+function renderJsonTabs(name, args) {
+  const el = $("#jsonPreview");
+  if (el) el.innerHTML = highlightJson(escapeHtml(pretty(rpcEnvelope(name, args))));
+}
+
+/* ---- main content router --------------------------------------------- */
+function renderContent(err) {
+  const content = $("#content");
+  content.textContent = "";
+
+  if (!state.selected) {
+    content.appendChild(renderConnectionHelp(err));
+    content.appendChild(renderLogCard());
+    content.appendChild(renderMCPMethods());
+    content.appendChild(renderConsole());
+    return;
+  }
+
+  if (!state.connected) content.appendChild(renderConnectionHelp(err));
+
+  const frag = renderToolDetail();
+  content.appendChild(frag);
+  renderResult();
+  renderLog();
+  const smoke = $("#smokeCard");
+  if (smoke && smoke.dataset.show === "1") smoke.classList.remove("hidden");
+}
+
+/* =========================== wiring =================================== */
+function isSameOrigin() {
+  try { return new URL(state.endpoint).origin === location.origin; }
+  catch (e) { return false; }
+}
+
+function applyHash() {
+  const m = /#tool=(\w+)/.exec(location.hash || "");
+  if (m) {
+    state.selected = m[1];
+    state.lastResult = null;
+  }
+}
+
+function onAction(action) {
+  switch (action) {
+    case "tools-list": return refreshTools().catch(err => setStatus("bad", "tools/list failed"));
+    case "resources-list": return mcpCall("resources/list", {}).then(r => alert("resources/list \u2192\n\n" + pretty(r))).catch(e => alert(e.message));
+    case "prompts-list": return mcpCall("prompts/list", {}).then(r => alert("prompts/list \u2192\n\n" + pretty(r))).catch(e => alert(e.message));
+    case "smoke":
+      $("#smokeCard") && ($("#smokeCard").dataset.show = "1");
+      if ($("#smokeCard")) $("#smokeCard").classList.remove("hidden");
+      return runSmokeTest();
+    case "clear-log": state.log = []; return renderLog();
+  }
+}
+
+function init() {
+  // When the page is served by the MCP server itself (at "/" or "/index.html")
+  // the API is same-origin, so no CORS is involved at all.  A page hosted
+  // anywhere else, such as Apache at /blender-mcp/, falls back to the
+  // conventional local bridge address.
+  const loopbackHost = /^(127\.0\.0\.1|localhost|\[::1\]|::1)$/i.test(location.hostname || "");
+  const servedByBridge = location.protocol.startsWith("http") && loopbackHost &&
+    /^\/(index\.html)?$/.test(location.pathname);
+  state.endpoint = servedByBridge ? location.origin + "/mcp" : DEFAULT_ENDPOINT;
+  $("#endpoint").value = state.endpoint;
+
+  $("#endpoint").addEventListener("change", (e) => {
+    state.endpoint = e.target.value.trim() || DEFAULT_ENDPOINT;
+    state.connected = false;
+    setStatus("", "disconnected");
+    renderContent();
+  });
+  $("#connectBtn").addEventListener("click", () => {
+    state.endpoint = $("#endpoint").value.trim() || DEFAULT_ENDPOINT;
+    connect();
+  });
+  $("#search").addEventListener("input", renderSidebar);
+  document.querySelectorAll("[data-action]").forEach(btn =>
+    btn.addEventListener("click", () => onAction(btn.dataset.action)));
+  window.addEventListener("hashchange", () => { applyHash(); renderSidebar(); renderContent(); });
+
+  $("#status").addEventListener("click", () => setServerPanel(!server.open));
+  document.addEventListener("click", (e) => {
+    // composedPath() still includes the panel when the click re-rendered it.
+    const path = e.composedPath();
+    if (server.open && !path.includes($("#serverPanel")) && !path.includes($("#status"))) setServerPanel(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && server.open) setServerPanel(false);
+  });
+
+  applyHash();
+  renderSidebar();
+  renderContent();
+  setStatus("", "disconnected");
+  renderLog();
+  connect();
+  // Follow a launch that is still in progress, for example after a reload.
+  refreshServerStatus().then(() => {
+    if (server.status && server.status.starting) serverAction("start");
+  });
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();
+</script>
+</body>
+</html>
