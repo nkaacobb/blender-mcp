@@ -467,3 +467,7 @@ python -m unittest -v test_http_transport
 
 The tests start their own server on a free port and never contact Blender, so they run
 fine while the real server is up.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
